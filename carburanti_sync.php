@@ -5,14 +5,13 @@ require 'vendor/autoload.php';
 ob_implicit_flush(true);
 while (ob_get_level()) ob_end_flush();
 
-// --- CONFIGURAZIONE (USIAMO GETENV PER LA SICUREZZA) ---
-$spreadsheetId=getenv('GOOGLE_SHEET_ID');
-$url_lista_impianti=getenv('URL_LISTA_IMPIANTI');
-$creds_json=getenv('GOOGLE_CREDS');
-$nomeFoglio='Foglio1'; 
-$dimensione_lotto=500; 
+$spreadsheetId = getenv('GOOGLE_SHEET_ID');
+$nomeFoglio = 'Foglio1'; 
+$url_lista_impianti = getenv('URL_LISTA_IMPIANTI');
+$dimensione_lotto = 500; 
 
 // 1. CONNESSIONE GOOGLE
+$creds_json = getenv('GOOGLE_CREDS');
 $client = new \Google\Client();
 $client->setAuthConfig(json_decode($creds_json, true));
 $client->addScope(\Google\Service\Sheets::SPREADSHEETS);
@@ -42,14 +41,15 @@ echo "Inizio analisi lotto: da $ultimo_indice a " . ($ultimo_indice + count($lot
 $rows = [];
 $contatore_ok = 0;
 
-// 4. CICLO CON CRAWLING
+// 4. CICLO CON CRAWLING AGGRESSIVO
 foreach ($lotto as $idx => $id) {
     $url = "https://carburanti.mise.gov.it/ospzApi/registry/servicearea/" . $id;
     
+    // Usiamo CURL invece di file_get_contents per gestire i timeout
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 5); 
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // Non aspettare più di 5 secondi
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0',
         'Origin: https://carburanti.mise.gov.it',
@@ -67,7 +67,7 @@ foreach ($lotto as $idx => $id) {
                 $rows[] = [$id, $f['name'], $f['price'], (!empty($f['isSelf'])) ? 'Sì' : 'No', $f['validityDate'], date('Y-m-d H:i:s')];
             }
             $contatore_ok++;
-            echo "($id:OK) "; 
+            echo "($id:OK) "; // Ti stampa l'ID appena lo trova!
         } else {
             echo "."; 
         }
@@ -75,6 +75,7 @@ foreach ($lotto as $idx => $id) {
         echo "x"; 
     }
 
+    // Salva ogni 20 impianti trovati (circa ogni 60 righe) per non perdere dati
     if (count($rows) >= 60) {
         echo "\n[Scrittura parziale su Google Sheets...]\n";
         $body = new \Google\Service\Sheets\ValueRange(['values' => $rows]);
@@ -82,7 +83,7 @@ foreach ($lotto as $idx => $id) {
         $rows = [];
     }
 
-    usleep(200000); 
+    usleep(200000); // 0.2 secondi di pausa
 }
 
 // 5. CHIUSURA
