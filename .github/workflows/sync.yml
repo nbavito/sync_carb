@@ -1,0 +1,29 @@
+name: Sync Prezzi API to Sheets
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json
+
+      - name: Installa librerie Google
+        run: composer require google/apiclient --no-interaction
+
+      - name: Esegui lo script
+        env:
+          GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          URL_LISTA_IMPIANTI: ${{ secrets.URL_LISTA_IMPIANTI }}
+        run: php carburanti_sync.php
