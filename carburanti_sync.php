@@ -12,7 +12,7 @@ $creds_json         = getenv('GOOGLE_CREDS');
 $nomeFoglio         = 'Foglio1'; 
 $dimensione_lotto   = 500; 
 
-// --- VERIFICA IP CORRENTE (Per tuo controllo) ---
+// --- VERIFICA IP CORRENTE ---
 $current_ip = file_get_contents('https://api.ipify.org');
 echo "Esecuzione avviata con IP: $current_ip\n\n";
 
@@ -53,3 +53,44 @@ foreach ($lotto as $idx => $id) {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Origin: https://carburanti.mise.gov.it',
+        'Referer: https://carburanti.mise.gov.it/'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200) {
+        $dati = json_decode($response, true);
+        if (isset($dati['fuels'])) {
+            foreach ($dati['fuels'] as $f) {
+                $rows[] = [$id, $f['name'], $f['price'], (!empty($f['isSelf'])) ? 'Sì' : 'No', $f['validityDate'], date('Y-m-d H:i:s')];
+            }
+            $contatore_ok++;
+            echo "($id:OK) ";
+        }
+    }
+
+    if (count($rows) >= 60) {
+        $body = new \Google\Service\Sheets\ValueRange(['values' => $rows]);
+        $service->spreadsheets_values->append($spreadsheetId, $nomeFoglio . '!A2', $body, ['valueInputOption' => 'RAW']);
+        $rows = [];
+    }
+    usleep(200000); 
+}
+
+// 5. CHIUSURA
+if (!empty($rows)) {
+    $body = new \Google\Service\Sheets\ValueRange(['values' => $rows]);
+    $service->spreadsheets_values->append($spreadsheetId, $nomeFoglio . '!A2', $body, ['valueInputOption' => 'RAW']);
+}
+
+$nuovo_indice = $ultimo_indice + count($lotto);
+if ($nuovo_indice >= $totale_assoluto) $nuovo_indice = $totale_assoluto + 1;
+$service->spreadsheets_values->update($spreadsheetId, $nomeFoglio . '!Z1', new \Google\Service\Sheets\ValueRange(['values' => [[$nuovo_indice]]]), ['valueInputOption' => 'RAW']);
+
+echo "\nFatto! Prossimo indice: $nuovo_indice\n";
