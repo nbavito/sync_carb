@@ -5,16 +5,12 @@ require 'vendor/autoload.php';
 ob_implicit_flush(true);
 while (ob_get_level()) ob_end_flush();
 
-// --- CONFIGURAZIONE ANONIMIZZATA ---
-$spreadsheetId      = getenv('GOOGLE_SHEET_ID');
-$url_lista_impianti = getenv('URL_LISTA_IMPIANTI');
-$creds_json         = getenv('GOOGLE_CREDS');
-$nomeFoglio         = 'Foglio1'; 
-$dimensione_lotto   = 500; 
-
-// --- VERIFICA IP CORRENTE ---
-$current_ip = file_get_contents('https://api.ipify.org');
-echo "Esecuzione avviata con IP: $current_ip\n\n";
+// --- CONFIGURAZIONE (USIAMO GETENV PER LA SICUREZZA) ---
+$spreadsheetId=getenv('GOOGLE_SHEET_ID');
+$url_lista_impianti=getenv('URL_LISTA_IMPIANTI');
+$creds_json=getenv('GOOGLE_CREDS');
+$nomeFoglio='Foglio1'; 
+$dimensione_lotto=500; 
 
 // 1. CONNESSIONE GOOGLE
 $client = new \Google\Client();
@@ -46,16 +42,16 @@ echo "Inizio analisi lotto: da $ultimo_indice a " . ($ultimo_indice + count($lot
 $rows = [];
 $contatore_ok = 0;
 
-// 4. CICLO CRAWLING
+// 4. CICLO CON CRAWLING
 foreach ($lotto as $idx => $id) {
     $url = "https://carburanti.mise.gov.it/ospzApi/registry/servicearea/" . $id;
     
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); 
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0',
         'Origin: https://carburanti.mise.gov.it',
         'Referer: https://carburanti.mise.gov.it/'
     ]);
@@ -71,15 +67,21 @@ foreach ($lotto as $idx => $id) {
                 $rows[] = [$id, $f['name'], $f['price'], (!empty($f['isSelf'])) ? 'Sì' : 'No', $f['validityDate'], date('Y-m-d H:i:s')];
             }
             $contatore_ok++;
-            echo "($id:OK) ";
+            echo "($id:OK) "; 
+        } else {
+            echo "."; 
         }
+    } else {
+        echo "x"; 
     }
 
     if (count($rows) >= 60) {
+        echo "\n[Scrittura parziale su Google Sheets...]\n";
         $body = new \Google\Service\Sheets\ValueRange(['values' => $rows]);
         $service->spreadsheets_values->append($spreadsheetId, $nomeFoglio . '!A2', $body, ['valueInputOption' => 'RAW']);
         $rows = [];
     }
+
     usleep(200000); 
 }
 
@@ -91,6 +93,7 @@ if (!empty($rows)) {
 
 $nuovo_indice = $ultimo_indice + count($lotto);
 if ($nuovo_indice >= $totale_assoluto) $nuovo_indice = $totale_assoluto + 1;
+
 $service->spreadsheets_values->update($spreadsheetId, $nomeFoglio . '!Z1', new \Google\Service\Sheets\ValueRange(['values' => [[$nuovo_indice]]]), ['valueInputOption' => 'RAW']);
 
-echo "\nFatto! Prossimo indice: $nuovo_indice\n";
+echo "\nFatto! Impianti validi aggiunti: $contatore_ok. Prossimo indice: $nuovo_indice\n";
