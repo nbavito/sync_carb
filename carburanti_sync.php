@@ -5,7 +5,7 @@ while(ob_get_level())ob_end_flush();
 $spreadsheetId=getenv('GOOGLE_SHEET_ID');
 $url_lista_impianti=getenv('URL_LISTA_IMPIANTI');
 $creds_json=getenv('GOOGLE_CREDS');
-$nomeFoglio='Foglio1';
+$nomeFoglio='Foglio2';
 $dimensione_lotto=500;
 $client=new \Google\Client();
 $client->setAuthConfig(json_decode($creds_json,true));
