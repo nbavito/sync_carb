@@ -20,7 +20,18 @@ $json_lista=file_get_contents($url_lista_impianti);
 $impianti_totali=json_decode($json_lista,true);
 $totale_assoluto=count($impianti_totali);
 if($ultimo_indice>=$totale_assoluto){
+// Controlla quante righe ha il foglio prima di fare clear
+$sheetMeta=$service->spreadsheets->get($spreadsheetId);
+$righe=1;
+foreach($sheetMeta->getSheets() as $sheet){
+if($sheet->getProperties()->getTitle()===$nomeFoglio){
+$righe=$sheet->getProperties()->getGridProperties()->getRowCount();
+break;
+}
+}
+if($righe>1){
 $service->spreadsheets_values->clear($spreadsheetId,$nomeFoglio.'!A2:F',new \Google\Service\Sheets\ClearValuesRequest());
+}
 $ultimo_indice=0;
 }
 $lotto=array_slice($impianti_totali,$ultimo_indice,$dimensione_lotto);
